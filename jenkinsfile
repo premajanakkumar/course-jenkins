@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout From Git') {
+            steps {
+				git "https://github.com/premajanakkumar/course-jenkins.git"
+            }
+        }
+
+        stage('Code Quality Check') {
+            steps {
+				
+                        withSonarQubeEnv(installationName : 'My-sonar-cloud', credentialsId : 'SONAR_TOKEN') {
+                    sh "mvn verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.organization=devsecops-prema -Dsonar.projectKey=course-jenkins"
+                }
+            }
+        }
+
+        stage('Code Security Check') {
+            steps {
+			 sh 'chmod a+x mvnw'
+				snykSecurity(
+                    snykInstallation: 'my-snyk',
+                    snykTokenId: 'snyk-token',
+					failOnIssues: false
+                )
+            }
+        }
+
+        stage('Build') {
+            steps {
+				sh 'mvn -B -DskipTests clean package'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+			sh 'set -ex'
+                sh 'scp -o StrictHostKeyChecking=no -P 2201 target/jenkins-0.0.1-SNAPSHOT.jar localhost:'
+                sh '''
+                    ssh -i ~/.ssh/id_rsa.pub -o StrictHostKeyChecking=no localhost -p 2201 '
+                      pkill -9 java
+                      nohup java -jar -Djava.io.tmpdir=/home/labsuser/.tmp -Dserver.port=8081 jenkins-0.0.1-SNAPSHOT.jar start >> jenkins-lab.log 2>&1 &
+                    '
+                '''
+
+            }
+        }
+
+        stage('Notify Engineering Team') {
+            steps {
+				echo('DELETE-ME')
+            }
+        }
+
+    }
+}
